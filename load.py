@@ -94,13 +94,14 @@ def rollback(connection):
         
         
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        raise BaseException("Database password not specified!")
+    if len(sys.argv) < 3:
+        raise BaseException("Database password or file path not specified!")
         
     input_password = sys.argv[1]
+    file_path = sys.argv[2]
     connection, cursor = get_oracle_cursor("config.ini", input_password)
     
-    df = load_data("FINAL_LIMS_MGBBIOBANK1411.xlsx")
+    df = load_data(file_path)
     clean_data(df)
     
     get_all_data(cursor)
