@@ -1,54 +1,3 @@
-# import configparser
-# import psycopg2
-
-
-# def config(filename='/udd/rexin/oracle_loading/DashApp/config.ini', section='database'):
-#     parser = configparser.ConfigParser()
-#     parser.read(filename)
-#     if parser.has_section(section):
-#         params = parser.items(section)
-#     else:
-#         raise Exception(f'Section {section} not found in the {filename} file')
-#     return dict(params)
-
-# def connect():
-#     conn = None
-#     try:
-#         params = config()
-
-#         print('Connecting to db')
-#         conn = psycopg2.connect(**params)
-#         cur = conn.cursor()
-#         print('db version:')
-#         cur.execute("""
-#                 SELECT table_name
-#                 FROM information_schema.tables
-#                 WHERE table_schema = 'public'
-
-#                 """
-#         )
-#         tables = cur.fetchall()
-#         for table in tables:
-#             print(f"Table: {table[0]}")
-#             cur.execute(f"SELECT * FROM {table[0]}")
-#             rows = cur.fetchall()
-#             for row in rows:
-#                 print(row)
-            
-
-#         cur.close()
-#     except (Exception, psycopg2.DatabaseError) as error:
-#         print(error)
-#     finally:
-#         if conn is not None:
-#             conn.close()
-#             print('Database connection closed.')
-
-
-# if __name__ == '__main__':
-#     connect()
-
-
 
 import dash
 import os
@@ -66,6 +15,9 @@ import base64
 import utils
 import hashlib
 import datetime
+from gen3.auth import Gen3Auth
+from gen3.submission import Gen3Submission
+
 
 # Define the generate_file_list_template function
 def generate_file_list_template(new_directory, done_directory, new_file_list=None, done_file_list=None):
@@ -210,13 +162,17 @@ def get_creation_date(filepath):
     return formatted_date
 
 # Set the "ingest_dir" to the  directory path 
-# for the test purpose, I saved in the Desktop
-ingest_dir = r"C:\Users\rexin\Desktop\docker"
-done_dir = r"C:\Users\rexin\Desktop\docker_done"
+ingest_dir = input("Enter the path to the input directory: ")
+done_dir = input("Enter the path to the output directory: ")
 
 # Create the directory if it does not exist
 os.makedirs(ingest_dir, exist_ok=True)
 os.makedirs(done_dir, exist_ok=True)
+
+# Create a Gen3Auth object for authentication
+auth = Gen3Auth(refresh_file=r"path_to_your_credentials_json_file")
+
+
 
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
@@ -237,6 +193,17 @@ def generate_new_file_list():
         {"filename": "new_file_2.txt", "size": "15KB", "owner": "Jane Smith", "date": "2023-07-30"},
         # Add more files as needed
     ]
+    # use Gen3Index as follows:
+    index = Gen3Index("https://chandemo5.bwh.harvard.edu/", auth_provider=auth)
+    if not index.is_healthy():
+        print(f"Uh oh! The indexing service is not healthy in the commons https://chandemo5.bwh.harvard.edu/")
+        exit()
+
+    print("Some file stats:")
+    print(index.get_stats())
+
+    print("Example GUID record:")
+    print(index.get(guid="afea506a-62d0-4e8e-9388-19d3c5ac52be"))
     return new_files
 
 # I have the code to generate new file at top, but for some reason it not works. so I add this file.
@@ -265,7 +232,7 @@ app.layout = html.Div(children=[
             generate_file_list_template(ingest_dir, done_dir, done_file_list if 'done_file_list' in globals() else []),
         ], id="done-file-list-container"),
 
-        dcc.Link("Go to Gen3 Portal", id="gen3-button", href="https://gen3.datacommons.io/login", style={"display": "block", "padding": "10px", "text-align": "center", "background-color": "#4CAF50", "color": "white", "text-decoration": "none", "border-radius": "5px", "margin": "10px auto"}),
+        dcc.Link("Go to Gen3 Portal", id="gen3-button", href="https://chandemo5.bwh.harvard.edu/", style={"display": "block", "padding": "10px", "text-align": "center", "background-color": "#4CAF50", "color": "white", "text-decoration": "none", "border-radius": "5px", "margin": "10px auto"}),
 
         # File list table
         html.Div([
@@ -299,15 +266,6 @@ app.layout = html.Div(children=[
         html.Button("Load File", id="load-file-button", n_clicks=0, style={"margin": "10px"}),
 
         # Result box to show loaded file's information
-        html.Div(id="result-box"),
-
-        # Login form
-        html.Div([
-            html.H3("Login to Access the Gen3 Portal"),
-            dcc.Input(id='username', type='text', placeholder='Enter username'),
-            dcc.Input(id='password', type='password', placeholder='Enter password'),
-            html.Button('Login', id='login-button', n_clicks=0)
-        ], style={'margin': '20px'}),
 
         html.Div(
             id="container",
@@ -362,6 +320,7 @@ def move_loaded_files(loaded_files):
      State("file-dropdown", "value"),
      State("file-list-table", "data")]
 )
+
 def handle_data_and_file_loading(contents, load_all_clicks, load_file_clicks, filename, ingest_dir, selected_filename, file_list_data):
     if not dash.callback_context.triggered:
         raise PreventUpdate
@@ -449,6 +408,32 @@ def update_file_lists(n_intervals):
     new_file_list, done_file_list = generate_file_list_template(ingest_dir, done_dir)
     return new_file_list, done_file_list
 
+# Add the login callback
+@app.callback(
+    Output("login-status", "children"),
+    [Input("login-button", "n_clicks")],
+    [State("username", "value"), State("password", "value")]
+)
+def handle_login(n_clicks, username, password):
+    global auth
+
+    if n_clicks == 0:
+        return "Please enter your credentials and click 'Login'."
+
+    if not username or not password:
+        return "Username and password are required."
+
+    try:
+        # Perform the login with the provided credentials
+        auth.login(username, password)
+
+        # Authentication success message
+        return "Login successful!"
+
+    except Exception as e:
+        # Authentication failure message
+        return f"Login failed: {str(e)}"
+    
 if __name__ == '__main__':
     # open on http://172.27.104.17:8050/
     app.run_server("0.0.0.0", debug=True)
