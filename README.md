@@ -1,7 +1,15 @@
-# oracle_loading
+# Gen3 Ingester App
 
-load.py can be run with "python load.py 'database password' 'file path'"
+```
+ssh nantucket
+source /proj/relibs/relib00/conda-cdnm/bin/activate
+conda activate /udd/rejpz/.conda/envs/dash-2.0.0
 
-dash-app can be run with "python dash-app.py" and runs on http://172.27.104.17:8050/
+git clone https://changit.bwh.harvard.edu/gen3/gen3-ingester-app
+cd gen3-ingester-app
 
-Note: password is temporarily in config.ini for use in the experimental dash app
+python DashApp/dash-app.py --configfile conf/chandemo5.yaml
+```
+
+Then visit (requires VPN): http://nantucket:8050/
+
