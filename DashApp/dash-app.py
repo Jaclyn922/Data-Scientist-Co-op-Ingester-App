@@ -9,6 +9,7 @@ from dash.exceptions import PreventUpdate
 
 import datetime
 
+from gen3.tools.metadata.ingest_manifest import async_ingest_metadata_manifest
 from gen3.index import Gen3Index
 from gen3.auth import Gen3Auth
 from gen3.submission import Gen3Submission
@@ -262,6 +263,7 @@ if __name__ == '__main__':
         program = 'g0'
         project = 'p0'
         chunksize = 1000
+        """
         for chunk in pd.read_csv(selected_filepath, chunksize=chunksize):
             # chunk is a DataFrame. To "process" the rows in the chunk:
             raw = chunk.to_csv().encode('utf-8')
@@ -278,11 +280,42 @@ if __name__ == '__main__':
                 sub.create_project('g0', js)
                 #submission_api_path = '_root'
             else:
-                print(f'putting ...')
-                submission_api_path = f'api/v0/submission/{program}/{project}'
-                u = requests.put(f'{gen3_base_url}/{submission_api_path}', data=raw, headers=headers)
-                print(f'{u.status_code=}')
-                print(f'{u.text=}') # should display the API response
+                #print(f'putting ...')
+                #submission_api_path = f'api/v0/submission/{program}/{project}'
+                #u = requests.put(f'{gen3_base_url}/{submission_api_path}', data=raw, headers=headers)
+                #print(f'{u.status_code=}')
+                #print(f'{u.text=}') # should display the API response
+                gen3.tools.metadata.ingest_manifest.async_ingest_metadata_manifest(gen3_base_url, selected_filepath, 'cdnm', auth=auth,
+                                                                                max_concurrent_requests=24,
+                                                                                manifest_file_delimiter=None,
+                                                                                output_filename='ingest-metadata-manifest-errors-1691080449.068882.log')
+        """
+        if 'program' in selected_filepath:
+            print(f'creating program')
+            sub = Gen3Submission(auth)
+            js = {'type':'program', 'name':'g0', 'dbgap_accession_number':'g00000000'}
+            sub.create_program(js)
+            #submission_api_path = '_root'
+        elif 'project' in selected_filepath:
+            print(f'creating project')
+            sub = Gen3Submission(auth)
+            js = {'type': 'project', 'name': 'p0', 'code': 'p0', 'dbgap_accession_number':'p00000000'}
+            sub.create_project('g0', js)
+            #submission_api_path = '_root'
+        else:
+            #print(f'putting ...')
+            #submission_api_path = f'api/v0/submission/{program}/{project}'
+            #u = requests.put(f'{gen3_base_url}/{submission_api_path}', data=raw, headers=headers)
+            #print(f'{u.status_code=}')
+            #print(f'{u.text=}') # should display the API response
+            print(f'calling gen3.tools.metadata.ingest_manifest.async_ingest_metadata_manifest')
+            f = async_ingest_metadata_manifest(gen3_base_url, selected_filepath, 'cdnm', auth=auth,
+                                                                            max_concurrent_requests=24,
+                                                                            manifest_file_delimiter=None,
+                                                                            output_filename='ingest-metadata-manifest-errors-1691080449.068882.log')
+            import asyncio
+            asyncio.run(f)
+
         return (u.text, u.status_code) ## this messaging to the user should be chunked as well
 
     # open on http://172.27.104.17:8050/
