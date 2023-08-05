@@ -1,7 +1,5 @@
 
 import argparse
-import base64
-import configparser
 import dash
 from dash import dcc
 from dash import html
@@ -11,10 +9,10 @@ from dash.exceptions import PreventUpdate
 
 import datetime
 
-#from gen3.auth import Gen3Auth
-#from gen3.submission import Gen3Submission
-#from gen3.index import Gen3Index
-#from gen3.metadata import Gen3Metadata
+from gen3.index import Gen3Index
+from gen3.auth import Gen3Auth
+from gen3.submission import Gen3Submission
+
 
 import hashlib
 import json
@@ -25,12 +23,9 @@ from pathlib import Path
 import requests
 import yaml
 
-# Define the generate_file_list_template function
-
-    # Initialize an empty list to store file information in the "new" directory
 def get_file_info(ingest_dir):
     new_file_list = []
-    for filename in os.listdir(ingest_dir):
+    for filename in sorted(os.listdir(ingest_dir)):
         filepath = os.path.join(ingest_dir, filename)
         file_info = {
             "filename": filename,
@@ -62,19 +57,6 @@ def generate_file_list_template(ingest_dir):
     )
 
     return new_file_list_table 
-
-
-def generate_file_info_table(file_info):
-    # Create a table to display the file info
-    table_header = [html.Th("Column Name"), html.Th("Value")]
-    table_rows = []
-
-    for key, value in file_info.items():
-        row = html.Tr([html.Td(key), html.Td(value)])
-        table_rows.append(row)
-
-    file_info_table = html.Table([html.Tr(table_header)] + table_rows, style={"border": "1px solid black"})
-    return file_info_table
 
 def generate_table_rows(file_list):
     # Generate the rows for the table
@@ -132,29 +114,9 @@ def get_creation_date(filepath):
     formatted_date = datetime.datetime.fromtimestamp(creation_time).strftime('%Y-%m-%d %H:%M:%S')
     return formatted_date
 
-# Define functIon to create a new file list
-# def generate_new_file_list():
-#     new_files = [
-#        {"filename": "new_file_1.txt", "size": "10KB", "owner": "John Doe", "date": "2023-07-29"},
-#        {"filename": "new_file_2.txt", "size": "15KB", "owner": "Jane Smith", "date": "2023-07-30"},
-#        # Add more files as needed
-#    ]
-
-#    # use Gen3Index as follows:
-#    index = Gen3Index("https://chandemo5.bwh.harvard.edu/", auth_provider=auth)
-#    if not index.is_healthy():
-#        print(f"Uh oh! The indexing service is not healthy in the commons https://chandemo5.bwh.harvard.edu/")
-#        exit()
-
-#   print("Some file stats:")
-#    print(index.get_stats())
-
-#    print("Example GUID record:")
-#    print(index.get(guid="afea506a-62d0-4e8e-9388-19d3c5ac52be"))
-#    return new_files
-
 if __name__ == '__main__':
 
+    # FIXME: improve logging (structlog? loki?)
     LOG = logging.getLogger(__name__)
     logging.basicConfig(level=logging.DEBUG)
 
@@ -162,6 +124,7 @@ if __name__ == '__main__':
     parser.add_argument('--configfile', type=str, help="Configuration file containing run settings")
     args = parser.parse_args()
 
+    # Get settings from the input configuration file
     with open(args.configfile) as c:
         config = yaml.load(c)
     LOG.debug(f'{config=}')
@@ -173,20 +136,39 @@ if __name__ == '__main__':
 
     app = dash.Dash(__name__, suppress_callback_exceptions=True)
     
-    # Example placeholder for db_col_names. What is the name in the database?
-    # db_col_names = ["Column1(can change later)", "Column2", "Column3"]
-
-    # I have the code to generate new file at top, but for some reason it not works. so I add this file.
-    # new_file_list = generate_new_file_list()
-
-    # Create a div to display the file info table
-    file_info_table_div = html.Div(id="file-info-table-container")
-
     app.layout = html.Div([
         dcc.Location(id='url', refresh=False),
         html.H1("CDNM Gen3 Ingester"),
 
         html.Div([
+            # File selection dropdown
+            html.H3(f"Select file to upload ({ingest_dir=})"),
+            dcc.Dropdown(
+                id='file-dropdown',
+                options=[{'label': str(ingest_dir/filename), 'value': str(ingest_dir/filename)} for filename in sorted(os.listdir(ingest_dir))],
+                placeholder="Select a file...",
+                style={'margin': '10px'}
+            ),
+            
+            # Load Buttons
+            html.Button("Load All", id="load-all-button", n_clicks=0, style={"margin": "10px"}),
+            html.Button("Load File", id="load-file-button", n_clicks=0, style={"margin": "10px"}),
+            
+
+            # Result box to show loaded file's information
+            html.Div([dcc.Input(
+                id='status-code-display',
+                value='',
+                style={'width': '10'},
+                ),]),
+
+            # Result box to show loaded file's response from the server
+            html.Div([dcc.Textarea(
+                id='textarea-log-output',
+                value='Textarea content initialized\nwith multiple lines of text',
+                style={'width': '100%', 'height': 300},
+                ),]),
+
             # File list table
             html.Div([
                 html.H3("Files in Ingest Directory"),
@@ -205,26 +187,7 @@ if __name__ == '__main__':
                 ),
             ], id="file-list-container"),
 
-            # File selection dropdown
-            html.H3("Select file to upload"),
-            dcc.Dropdown(
-                id='file-dropdown',
-                options=[{'label': filename, 'value': str(ingest_dir/filename)} for filename in os.listdir(ingest_dir)],
-                placeholder="Select a file...",
-                style={'margin': '10px'}
-            ),
-            
-            # Load Buttons
-            html.Button("Load All", id="load-all-button", n_clicks=0, style={"margin": "10px"}),
-            html.Button("Load File", id="load-file-button", n_clicks=0, style={"margin": "10px"}),
-            
 
-            # Result box to show loaded file's information
-            html.Div([dcc.Textarea(
-                id='textarea-log-output',
-                value='Textarea content initialized\nwith multiple lines of text',
-                style={'width': '100%', 'height': 300},
-                ),]),
         ]),
 
         # Define the dcc.Store components to store the file lists
@@ -245,7 +208,10 @@ if __name__ == '__main__':
     #        State("file-list-table", "data")]
     #)
     @app.callback(
-        Output("textarea-log-output", "value"),
+        [
+            Output("textarea-log-output", "value"),
+            Output("status-code-display", "value"),
+        ],
         Input("load-file-button", "n_clicks"),
         State('file-dropdown', 'value')
         )
@@ -273,11 +239,11 @@ if __name__ == '__main__':
         # file_info = next(item for item in file_list_data if item["filename"] == selected_filepath)
         # file_info["status"] = "Loaded"  # Add a status field to indicate loaded status
 
-        # Return the updated file list and the loaded file's information
-        #auth = Gen3Auth(refresh_file="credentials.json")
+        auth = Gen3Auth()
         #mds = Gen3Metadata(auth_provider=auth)
 
         # Save the copied credentials.json from the website and paste the api_key and key_id into a variable "key":
+        # python should be able to get user's home directory (maybe "import getuser"?)
         with open('/udd/rejpz/.gen3/credentials.json') as fh:
             key = json.load(fh)
         print(f'{key=}')
@@ -285,7 +251,7 @@ if __name__ == '__main__':
         # Pass the API key to the Gen3 API using "requests.post" to receive the access token:
         token_rq = requests.post(f'{gen3_base_url}/user/credentials/cdis/access_token', json=key)
         if token_rq.status_code != 200:
-            return token_rq.text
+            return (token_rq.text, token_rq.status_code)
         token = token_rq.json()
         print(f'{token=}')
 
@@ -299,15 +265,25 @@ if __name__ == '__main__':
         for chunk in pd.read_csv(selected_filepath, chunksize=chunksize):
             # chunk is a DataFrame. To "process" the rows in the chunk:
             raw = chunk.to_csv().encode('utf-8')
-            print(f'putting ...')
             if 'program' in selected_filepath:
-                submission_api_path = '_root'
+                print(f'creating program')
+                sub = Gen3Submission(auth)
+                js = {'type':'program', 'name':'g0', 'dbgap_accession_number':'g00000000'}
+                sub.create_program(js)
+                #submission_api_path = '_root'
+            elif 'project' in selected_filepath:
+                print(f'creating project')
+                sub = Gen3Submission(auth)
+                js = {'type': 'project', 'name': 'p0', 'code': 'p0', 'dbgap_accession_number':'p00000000'}
+                sub.create_project('g0', js)
+                #submission_api_path = '_root'
             else:
+                print(f'putting ...')
                 submission_api_path = f'api/v0/submission/{program}/{project}'
-            u = requests.put(f'{gen3_base_url}/{submission_api_path}', data=raw, headers=headers)
-            print(f'{u.status_code=}')
-            print(f'{u.text=}') # should display the API response
-        return 'DONE!'
+                u = requests.put(f'{gen3_base_url}/{submission_api_path}', data=raw, headers=headers)
+                print(f'{u.status_code=}')
+                print(f'{u.text=}') # should display the API response
+        return (u.text, u.status_code) ## this messaging to the user should be chunked as well
 
     # open on http://172.27.104.17:8050/
     app.run_server("0.0.0.0", debug=True)
