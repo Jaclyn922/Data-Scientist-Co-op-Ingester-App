@@ -1,5 +1,4 @@
 import configparser
-import cx_Oracle
 import hashlib
 
 hashed_password = "a36fc0ffe969954bf0dc4de4a7ba8e0886d77219a9d3c294324ccb709bf442b5"
