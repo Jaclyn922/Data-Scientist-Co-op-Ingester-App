@@ -23,6 +23,25 @@ import pandas as pd
 from pathlib import Path
 import requests
 import yaml
+import structlog
+
+# def configure_logging():
+#     structlog.configure(
+#         processors=[
+#             structlog.stdlib.add_logger_name,
+#             structlog.stdlib.add_log_level,
+#             structlog.stdlib.PositionalArgumentsFormatter(),
+#             structlog.processors.TimeStamper(fmt="iso"),
+#             structlog.processors.StackInfoRenderer(),
+#             structlog.processors.format_exc_info,
+#             structlog.processors.UnicodeDecoder(),
+#             structlog.processors.JSONRenderer(),
+#         ],
+#         context_class=structlog.threadlocal.wrap_dict(dict),
+#         logger_factory=structlog.stdlib.LoggerFactory(),
+#         wrapper_class=structlog.stdlib.BoundLogger,
+#         cache_logger_on_first_use=True,
+#     )
 
 def get_file_info(ingest_dir):
     new_file_list = []
@@ -116,6 +135,10 @@ def get_creation_date(filepath):
     return formatted_date
 
 if __name__ == '__main__':
+    # configure_logging()
+    # logger = structlog.get_logger()
+
+    # parser = argparse.ArgumentParser(description=f"Gen3 Ingester App", usage=f"python DashApp/dash-app.py --configfile=conf/chandemo5.yaml")
 
     # FIXME: improve logging (structlog? loki?)
     LOG = logging.getLogger(__name__)
@@ -216,10 +239,22 @@ if __name__ == '__main__':
         Input("load-file-button", "n_clicks"),
         State('file-dropdown', 'value')
         )
+    
+    # @app.callback(
+    #     [
+    #         Output("textarea-log-output", "value"),
+    #         Output("status-code-display", "value"),
+    #     ],
+    #     Input("load-file-button", "n_clicks"),
+    #     State('file-dropdown', 'value')
+    # )
+
     def handle_data_and_file_loading(n_clicks, selected_filepath):
         LOG.debug(f'handle_data_and_file_loading({selected_filepath=})')
         if not dash.callback_context.triggered:
             raise PreventUpdate
+
+        #logger.debug(f'handle_data_and_file_loading({selected_filepath=})')
 
         trigger_id = dash.callback_context.triggered[0]["prop_id"]
         LOG.debug(f'{trigger_id=})')
