@@ -1,4 +1,3 @@
-
 import argparse
 import dash
 from dash import dcc
@@ -23,7 +22,7 @@ import pandas as pd
 from pathlib import Path
 import requests
 import yaml
-import structlog
+#import structlog
 
 # def configure_logging():
 #     structlog.configure(
@@ -150,7 +149,8 @@ if __name__ == '__main__':
 
     # Get settings from the input configuration file
     with open(args.configfile) as c:
-        config = yaml.load(c)
+        #config = yaml.load(c)
+        config = yaml.safe_load(c)
     LOG.debug(f'{config=}')
     base_ingest_dir = Path(config['base_ingest_dir'])
     ingest_dir = base_ingest_dir/'new'
@@ -231,24 +231,16 @@ if __name__ == '__main__':
     #        State("file-dropdown", "value"),
     #        State("file-list-table", "data")]
     #)
+ 
+    #1
     @app.callback(
-        [
-            Output("textarea-log-output", "value"),
-            Output("status-code-display", "value"),
-        ],
-        Input("load-file-button", "n_clicks"),
-        State('file-dropdown', 'value')
-        )
-    
-    # @app.callback(
-    #     [
-    #         Output("textarea-log-output", "value"),
-    #         Output("status-code-display", "value"),
-    #     ],
-    #     Input("load-file-button", "n_clicks"),
-    #     State('file-dropdown', 'value')
-    # )
-
+    [
+        Output("textarea-log-output", "value"),
+        Output("status-code-display", "value"),
+    ],
+    Input("load-file-button", "n_clicks"),
+    State('file-dropdown', 'value')
+)
     def handle_data_and_file_loading(n_clicks, selected_filepath):
         LOG.debug(f'handle_data_and_file_loading({selected_filepath=})')
         if not dash.callback_context.triggered:
@@ -343,15 +335,72 @@ if __name__ == '__main__':
             #u = requests.put(f'{gen3_base_url}/{submission_api_path}', data=raw, headers=headers)
             #print(f'{u.status_code=}')
             #print(f'{u.text=}') # should display the API response
-            print(f'calling gen3.tools.metadata.ingest_manifest.async_ingest_metadata_manifest')
-            f = async_ingest_metadata_manifest(gen3_base_url, selected_filepath, 'cdnm', auth=auth,
-                                                                            max_concurrent_requests=24,
-                                                                            manifest_file_delimiter=None,
-                                                                            output_filename='ingest-metadata-manifest-errors-1691080449.068882.log')
+
+            #orginal
+        #     print(f'calling gen3.tools.metadata.ingest_manifest.async_ingest_metadata_manifest')
+        #     f = async_ingest_metadata_manifest(gen3_base_url, selected_filepath, 'cdnm', auth=auth,
+        #                                                                     max_concurrent_requests=24,
+        #                                                                     manifest_file_delimiter=None,
+        #                                                                     output_filename='ingest-metadata-manifest-errors-1691080449.068882.log')
+        #     import asyncio
+        
+        #     loop = asyncio.new_event_loop()
+        #     asyncio.set_event_loop(loop)
+        #     loop.run_until_complete(async_ingest_metadata_manifest(
+        #         gen3_base_url,
+        #         selected_filepath,
+        #         'cdnm',
+        #         auth=auth,
+        #         max_concurrent_requests=24,
+        #         manifest_file_delimiter=None,
+        #         output_filename='ingest-metadata-manifest-errors.log'
+        #     ))
+        #     loop.close()
+
+        #     asyncio.run(f)
+
+        # #return (u.text, u.status_code) ## this messaging to the user should be chunked as as well
+        # #return ("Async ingestion completed.", 200)
+        # return (f.result(), 200)
             import asyncio
-            asyncio.run(f)
+           # Use async_ingest_metadata_manifest to load CSV data into Gen3
+            error_log_filename = 'ingest-metadata-manifest-errors.log' 
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            result = loop.run_until_complete(async_upload_csv(selected_filepath, error_log_filename))
 
-        return (u.text, u.status_code) ## this messaging to the user should be chunked as well
+            # It keeps showing name 'u' is not define, so I change to result
+            # Update the status messages based on the result
+            if result["success"]:
+                status_message = "CSV file successfully loaded into Gen3."
+                status_code = "200"  # Status code indicating success
+            else:
+                status_message = "An error occurred during CSV upload."
+                status_code = "500"  # Status code indicating error
 
-    # open on http://172.27.104.17:8050/
+            return (
+                status_message,
+                status_code,
+            )
+
+        # Define an async function to upload CSV data
+    async def async_upload_csv(selected_filepath, error_log_filename):
+        try:
+            auth = Gen3Auth()
+            await async_ingest_metadata_manifest(
+                gen3_base_url,
+                selected_filepath,
+                'cdnm',
+                auth=auth,
+                max_concurrent_requests=24,
+                manifest_file_delimiter=None,
+                output_filename=error_log_filename,
+            )
+            return {"success": True}  # Indicate successful upload
+        except Exception as e:
+            print(f"Error during CSV upload: {e}")
+            return {"success": False}  # Indicate error
+
+    
+        # open on http://172.27.104.17:8050/
     app.run_server("0.0.0.0", debug=True)
